@@ -318,7 +318,7 @@ def try_place_tan(
     return False, []
 
 # -------------------------------------------------------------------------
-# (A) Create “Solved” Version by Negative Buffer
+# (A) Create "Solved" Version by Negative Buffer
 # -------------------------------------------------------------------------
 def create_solved_version(pieces: List[List[Point]], gap=1.0) -> List[List[Point]]:
     """
@@ -374,7 +374,7 @@ def reflect_y(geom, cy):
 # -------------------------------------------------------------------------
 def measure_tangram_outline(pieces: List[List[Point]]) -> Dict[str, Any]:
     """
-    Computes “global” properties of the combined outline:
+    Computes "global" properties of the combined outline:
     - perimeter
     - num_holes
     - num_vertices (exterior)
@@ -632,26 +632,64 @@ def save_tangram_images():
             print(f"Generating {samples_per_piece} images for {num_pieces} piece(s)...")
 
             for idx in range(samples_per_piece):
-                shapes_selected = random.sample(TAN_TYPES, num_pieces)
-                random.shuffle(shapes_selected)
-
                 placed_polys = []
                 success = True
+                
+                if num_pieces == 1:
+                    # For 1-piece tangrams, first create a 7-piece tangram
+                    # and then randomly remove pieces until only one remains
+                    shapes_selected = random.sample(TAN_TYPES, 7)
+                    random.shuffle(shapes_selected)
+                    
+                    # Place first piece in the center
+                    sname, spoly = shapes_selected[0]
+                    first_angle = random.choice(ALLOWED_ROTATIONS)
+                    rotated_first = rotate_polygon(spoly, first_angle)
+                    grid_center = GRID_SIZE // 2
+                    placed_polys.append(translate_polygon(rotated_first, grid_center, grid_center))
+                    
+                    # Place remaining pieces
+                    for (nm, poly) in shapes_selected[1:]:
+                        ok, newp = try_place_tan(placed_polys, poly, max_attempts=500)
+                        if not ok:
+                            success = False
+                            break
+                        placed_polys.append(newp)
+                    
+                    # If successful, randomly remove pieces until only one remains
+                    if success and within_bounds(placed_polys):
+                        # Keep removing pieces randomly until only one remains
+                        while len(placed_polys) > 1:
+                            # Randomly select a piece to keep
+                            piece_to_remove = random.randrange(len(placed_polys))
+                            placed_polys.pop(piece_to_remove)
+                    else:
+                        # If 7-piece generation failed, fall back to standard 1-piece generation
+                        shapes_selected = random.sample(TAN_TYPES, 1)
+                        sname, spoly = shapes_selected[0]
+                        first_angle = random.choice(ALLOWED_ROTATIONS)
+                        rotated_first = rotate_polygon(spoly, first_angle)
+                        grid_center = GRID_SIZE // 2
+                        placed_polys = [translate_polygon(rotated_first, grid_center, grid_center)]
+                else:
+                    # Standard method for 2-7 pieces
+                    shapes_selected = random.sample(TAN_TYPES, num_pieces)
+                    random.shuffle(shapes_selected)
 
-                # Place first piece in the center
-                sname, spoly = shapes_selected[0]
-                first_angle = random.choice(ALLOWED_ROTATIONS)
-                rotated_first = rotate_polygon(spoly, first_angle)
-                grid_center = GRID_SIZE // 2
-                placed_polys.append(translate_polygon(rotated_first, grid_center, grid_center))
+                    # Place first piece in the center
+                    sname, spoly = shapes_selected[0]
+                    first_angle = random.choice(ALLOWED_ROTATIONS)
+                    rotated_first = rotate_polygon(spoly, first_angle)
+                    grid_center = GRID_SIZE // 2
+                    placed_polys.append(translate_polygon(rotated_first, grid_center, grid_center))
 
-                # Place remaining
-                for (nm, poly) in shapes_selected[1:]:
-                    ok, newp = try_place_tan(placed_polys, poly, max_attempts=500)
-                    if not ok:
-                        success = False
-                        break
-                    placed_polys.append(newp)
+                    # Place remaining
+                    for (nm, poly) in shapes_selected[1:]:
+                        ok, newp = try_place_tan(placed_polys, poly, max_attempts=500)
+                        if not ok:
+                            success = False
+                            break
+                        placed_polys.append(newp)
 
                 # If failed or out of bounds
                 normal_filename = f"{num_pieces}piece_{idx + 1:04d}_normal.png"
